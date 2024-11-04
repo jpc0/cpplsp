@@ -1,0 +1,29 @@
+          OperatorOrPunctuator(0:0)	"#"
+                    Identifier(0:1)	"include"
+          OperatorOrPunctuator(0:9)	"<"
+                    Identifier(0:10)	"iostream"
+          OperatorOrPunctuator(0:18)	">"
+                       NewLine(0:19)
+                       NewLine(1:0)
+                    Identifier(2:0)	"int"
+                    Identifier(2:4)	"main"
+          OperatorOrPunctuator(2:8)	"("
+                    Identifier(2:9)	"int"
+                    Identifier(2:13)	"argc"
+          OperatorOrPunctuator(2:17)	","
+                    Identifier(2:19)	"char"
+          OperatorOrPunctuator(2:23)	"*"
+          OperatorOrPunctuator(2:24)	"*"
+                    Identifier(2:26)	"argv"
+          OperatorOrPunctuator(2:30)	")"
+          OperatorOrPunctuator(2:32)	"{"
+                       NewLine(2:33)
+                    Identifier(3:1)	"std"
+          OperatorOrPunctuator(3:4)	"::"
+                    Identifier(3:6)	"cout"
+          OperatorOrPunctuator(3:11)	"<<"
+                 StringLiteral(3:14)	""Hello, World!\n""
+          OperatorOrPunctuator(3:31)	";"
+                       NewLine(3:32)
+          OperatorOrPunctuator(4:0)	"}"
+                       NewLine(4:1)

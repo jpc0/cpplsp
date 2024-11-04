@@ -1,0 +1,5 @@
+add_executable(test)
+target_sources(test PRIVATE main.cpp)
+target_compile_features(test PRIVATE cxx_std_20)
+target_link_libraries(test PRIVATE Lexer)
+target_link_libraries(test PRIVATE Args)
