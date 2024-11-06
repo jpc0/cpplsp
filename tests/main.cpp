@@ -24,7 +24,7 @@ auto run_test(std::string_view test) -> bool {
   Lexer lex(test);
   std::string outfile = std::string{test} + "_out";
   if (!std::filesystem::exists(outfile)) {
-    std::cerr << "No outfile available\n";
+    std::cerr << "Test: \"" << test << "\" No outfile available\n";
     return false;
   }
   auto token = lex.get_next_token();
@@ -53,9 +53,13 @@ auto create_out(std::string_view test) {
   out.close();
 }
 
-constexpr std::array<std::string_view, 4> tests{
-    "tests/identifier", "tests/ppnumber", "tests/hello_world",
-    "tests/string_literal"};
+constexpr std::array<std::string_view, 6> tests{
+    "tests/identifier",
+    "tests/ppnumber",
+    "tests/hello_world",
+    "tests/string_literal",
+    "tests/user_defined_string_literal",
+    "tests/raw_string_literal"};
 
 int main(int argc, char **argv) {
   Args args{argc, argv};
@@ -64,10 +68,10 @@ int main(int argc, char **argv) {
       create_out(args[2]);
     } else if (args[1] == "run") {
       if (!run_test(args[2])) {
-        std::cerr << "Test for " << args[2] << " failed!\n";
+        std::cerr << "Test for \"" << args[2] << "\" failed!\n";
         return EXIT_FAILURE;
       } else {
-        std::cerr << "Test for " << args[2] << " passed!\n";
+        std::cerr << "Test for \"" << args[2] << "\" passed!\n";
       }
     } else {
       std::cerr << "Unknown argument passed: {" << args[1] << "}\n";
@@ -83,7 +87,7 @@ int main(int argc, char **argv) {
     if (!failed.empty()) {
       std::cout << failed.size() << " of " << tests.size() << " failed:\n";
       for (auto test : failed) {
-        std::cout << "\tTest for " << test << " failed!\n";
+        std::cout << "\tTest for \"" << test << "\" failed!\n";
       }
       return EXIT_FAILURE;
     }

@@ -11,7 +11,6 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
-#include <iterator>
 #include <optional>
 #include <string>
 #include <variant>
@@ -34,14 +33,14 @@ std::array<char, 53> constexpr nondigits{
     'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P',
     'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', '_'};
 
-inline auto is_nondigit = [](char item) {
+inline auto is_nondigit(char item) {
   return std::find(nondigits.begin(), nondigits.end(), item) != nondigits.end();
 };
 
 std::array<char, 10> constexpr digits{'0', '1', '2', '3', '4',
                                       '5', '6', '7', '8', '9'};
 
-inline auto is_digit = [](char item) {
+inline auto is_digit(char item) {
   return std::find(digits.begin(), digits.end(), item) != digits.end();
 };
 
@@ -123,8 +122,6 @@ struct RawPreprocessorToken {
   std::string raw_token;
   Position position;
 
-  auto logical_token() const -> std::string_view;
-
   auto size() const -> std::size_t;
   auto cut(std::size_t pos);
 };
@@ -132,7 +129,9 @@ struct RawPreprocessorToken {
 std::ostream &operator<<(std::ostream &os, const RawPreprocessorToken &dt);
 
 struct StringLiteral {
+  std::optional<std::string> encoding_prefix;
   std::string raw_token;
+  std::optional<std::string> suffix;
   Position position;
 
   auto logical_token() const -> std::string_view;
@@ -226,6 +225,8 @@ public:
   auto print() -> void;
 
 private:
+  auto parse_string_literal() -> std::optional<StringLiteral>;
+
   std::filesystem::path path;
   std::ifstream istream;
   Position pos{};
