@@ -85,6 +85,7 @@ Lexer::Lexer(std::filesystem::path const &path) : path(path), istream(path){};
 
 auto Lexer::parse_string_literal() -> std::optional<StringLiteral> {
   std::string buffer;
+  std::string extra_pre_whitespace;
   bool is_string_literal{false};
   bool string_literal{false};
   auto current_pos = pos;
@@ -123,6 +124,11 @@ auto Lexer::parse_string_literal() -> std::optional<StringLiteral> {
 
     if ((std::isspace(c) || !(is_digit(c) || is_nondigit(c))) &&
         !string_literal) {
+      if (std::isspace(c) && c != '\n' && buffer.empty()) {
+        extra_pre_whitespace += c;
+        new_pos.character += 1;
+        continue;
+      }
       istream.putback(c);
       break;
     }
@@ -131,17 +137,23 @@ auto Lexer::parse_string_literal() -> std::optional<StringLiteral> {
   }
 
   if (buffer.empty()) {
+    std::for_each(extra_pre_whitespace.rbegin(), buffer.rend(),
+                  [&](char c) { istream.putback(c); });
     return {};
   }
 
   if (is_string_literal == false) {
     std::for_each(buffer.rbegin(), buffer.rend(),
                   [&](char c) { istream.putback(c); });
+    std::for_each(extra_pre_whitespace.rbegin(), buffer.rend(),
+                  [&](char c) { istream.putback(c); });
     return {};
   }
   auto prefix = read_identifier(buffer.begin(), buffer.end());
   if (buffer.front() != '\"' && !prefix.has_value()) {
     std::for_each(buffer.rbegin(), buffer.rend(),
+                  [&](char c) { istream.putback(c); });
+    std::for_each(extra_pre_whitespace.rbegin(), buffer.rend(),
                   [&](char c) { istream.putback(c); });
     // TODO: We should probably error here
     std::cerr << "Invalid prefix value in " << buffer << '\n';
@@ -158,6 +170,8 @@ auto Lexer::parse_string_literal() -> std::optional<StringLiteral> {
         read_identifier(buffer.begin() + end_of_string + 1, buffer.end());
     if (!maybe_suffix.has_value()) {
       std::for_each(buffer.rbegin(), buffer.rend(),
+                    [&](char c) { istream.putback(c); });
+      std::for_each(extra_pre_whitespace.rbegin(), buffer.rend(),
                     [&](char c) { istream.putback(c); });
       // TODO: We should probably error here
       std::cerr << "Invalid suffix value in " << buffer << '\n';

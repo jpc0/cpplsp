@@ -53,12 +53,13 @@ auto create_out(std::string_view test) {
   out.close();
 }
 
-constexpr std::array<std::string_view, 6> tests{
+constexpr std::array<std::string_view, 7> tests{
     "tests/identifier",
     "tests/ppnumber",
     "tests/hello_world",
     "tests/string_literal",
     "tests/user_defined_string_literal",
+    "tests/two_string_literals",
     "tests/raw_string_literal"};
 
 int main(int argc, char **argv) {
