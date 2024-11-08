@@ -15,9 +15,8 @@ public:
     ArgsIterator &operator++();
     ArgsIterator operator++(int);
     std::string_view operator*() const;
-    using difference_type = std::string_view;
+    using difference_type = std::size_t;
     using value_type = std::string_view;
-    using pointer = std::string_view;
     using reference = std::string_view;
     using iterator_category = std::forward_iterator_tag;
 

@@ -33,14 +33,14 @@ std::array<char, 53> constexpr nondigits{
     'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P',
     'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', '_'};
 
-inline auto is_nondigit(char item) {
+inline auto is_nondigit(char item) -> bool {
   return std::find(nondigits.begin(), nondigits.end(), item) != nondigits.end();
 };
 
 std::array<char, 10> constexpr digits{'0', '1', '2', '3', '4',
                                       '5', '6', '7', '8', '9'};
 
-inline auto is_digit(char item) {
+inline auto is_digit(char item) -> bool {
   return std::find(digits.begin(), digits.end(), item) != digits.end();
 };
 

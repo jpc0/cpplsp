@@ -3,6 +3,7 @@
 #include <cassert>
 #include <exception>
 #include <iostream>
+#include <iterator>
 #include <lexer.h>
 #include <source_location>
 
@@ -20,6 +21,28 @@ constexpr auto check(bool condition, char const *message,
 
 class CharRingBuffer {
 public:
+  class BufferIterator {
+  public:
+    BufferIterator(CharRingBuffer const &, bool = false);
+
+    auto operator==(BufferIterator const &) const -> bool;
+    auto operator!=(BufferIterator) const -> bool;
+
+    BufferIterator &operator++();
+    BufferIterator operator++(int);
+    auto operator*() const -> char;
+
+    using difference_type = std::size_t;
+    using value_type = char;
+    using reference = char;
+    using iterator_category = std::forward_iterator_tag;
+
+  private:
+    CharRingBuffer const &buffer;
+    bool end;
+    std::size_t index{};
+  };
+
   CharRingBuffer() : m_size(0), m_capacity(4), m_read_head(0), m_write_head(0) {
     m_data = new char[m_capacity];
   };
@@ -85,8 +108,17 @@ public:
     return out;
   }
 
+  auto drop(std::size_t num) -> void {
+    check(num <= m_size, "Cannot drop more items than we have");
+    m_read_head += num;
+    m_size -= num;
+  }
+
   auto size() const -> std::size_t { return m_size; }
   auto capacity() const -> std::size_t { return m_capacity; }
+
+  auto begin() const -> BufferIterator { return BufferIterator{*this}; }
+  auto end() const -> BufferIterator { return BufferIterator{*this, true}; }
 
 private:
   std::size_t m_size;
@@ -94,7 +126,49 @@ private:
   std::size_t m_read_head;
   std::size_t m_write_head;
   char *m_data;
+  friend BufferIterator;
 };
+
+CharRingBuffer::BufferIterator::BufferIterator(CharRingBuffer const &buffer,
+                                               bool end)
+    : buffer(buffer), end(end) {}
+
+bool CharRingBuffer::BufferIterator::operator==(
+    BufferIterator const &other) const {
+  check(&this->buffer == &other.buffer,
+        "Iterator does not point to same CharRingBuffer");
+  if (this->end || other.end) {
+    return this->index == buffer.size();
+  }
+  return other.index == this->index;
+};
+
+bool CharRingBuffer::BufferIterator::operator!=(BufferIterator other) const {
+  return !(*this == other);
+}
+
+CharRingBuffer::BufferIterator &CharRingBuffer::BufferIterator::operator++() {
+  index++;
+  return *this;
+}
+
+CharRingBuffer::BufferIterator CharRingBuffer::BufferIterator::operator++(int) {
+  BufferIterator retval = *this;
+  ++(*this);
+  return retval;
+}
+
+char CharRingBuffer::BufferIterator::operator*() const {
+  check((index <= this->buffer.size()), "Index out of range");
+  return this->buffer[index];
+}
+
+std::ostream &operator<<(std::ostream &os, const CharRingBuffer &dt) {
+  for (auto i : dt) {
+    os << i;
+  }
+  return os;
+}
 
 int main(int argc, char **argv) {
   Args args{argc, argv};
