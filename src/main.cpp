@@ -5,7 +5,9 @@
 #include <iostream>
 #include <iterator>
 #include <lexer.h>
+#include <memory>
 #include <source_location>
+#include <type_traits>
 
 constexpr auto check(bool condition, char const *message,
                      std::source_location source_location =
@@ -19,18 +21,18 @@ constexpr auto check(bool condition, char const *message,
   }
 }
 
-class CharRingBuffer {
+template <typename T> class RingBuffer {
 public:
   class BufferIterator {
   public:
-    BufferIterator(CharRingBuffer const &, bool = false);
+    BufferIterator(RingBuffer const &, bool = false);
 
     auto operator==(BufferIterator const &) const -> bool;
     auto operator!=(BufferIterator) const -> bool;
 
     BufferIterator &operator++();
     BufferIterator operator++(int);
-    auto operator*() const -> char;
+    auto operator*() const -> T &;
 
     using difference_type = std::size_t;
     using value_type = char;
@@ -38,102 +40,190 @@ public:
     using iterator_category = std::forward_iterator_tag;
 
   private:
-    CharRingBuffer const &buffer;
+    RingBuffer const &buffer;
     bool end;
     std::size_t index{};
   };
 
-  CharRingBuffer() : m_size(0), m_capacity(4), m_read_head(0), m_write_head(0) {
-    m_data = new char[m_capacity];
-  };
+  RingBuffer();
 
-  ~CharRingBuffer() { delete[] m_data; }
+  ~RingBuffer();
 
-  auto resize(std::size_t size) -> void {
-    check(std::bit_ceil(size) >= m_capacity,
-          "New capacity cannot be smaller than current capacity");
-    if (m_size == 0) {
-      delete[] m_data;
-      m_capacity = std::bit_ceil(size);
-      m_data = new char[m_capacity];
-      return;
-    }
-    auto new_capacity = std::bit_ceil(size);
-    auto *new_data = new char[new_capacity];
-    std::size_t j = 0;
-    for (auto i = m_read_head; i < m_write_head; i = (i + 1) % m_capacity) {
-      new_data[j] = m_data[i];
-      j++;
-    }
-    delete[] m_data;
-    m_data = new_data;
-    m_capacity = new_capacity;
-    m_read_head = 0;
-    m_write_head = m_size;
-  }
+  auto push_back(T &&value) -> void;
+  template <typename... Args>
+    requires(std::is_constructible_v<T, Args...>)
+  auto emplace_back(Args &&...args) -> void;
 
-  auto operator[](std::size_t index) const -> char {
-    check(index < m_size, "Index out of bounds");
-    return m_data[(m_read_head + index) % m_capacity];
-  }
+  auto pop_back() -> T;
+  auto pop_front() -> T;
 
-  auto push_back(char value) -> void {
-    if (m_size == (m_capacity - 1)) {
-      resize(m_capacity * 2);
-    }
-    m_data[m_write_head] = value;
-    m_write_head = (m_write_head + 1) % m_capacity;
-    m_size += 1;
-  }
+  auto drop(std::size_t num) -> void;
 
-  auto pop_back() -> char {
-    check(m_size > 0, "Buffer is empty");
-    if (m_write_head == 0) {
-      auto out = m_data[m_capacity - 1];
-      m_write_head = m_capacity - 1;
-      m_size -= 1;
-      return out;
-    }
-    auto out = m_data[m_write_head - 1];
-    m_write_head = m_write_head - 1;
-    m_size -= 1;
-    return out;
-  }
+  auto size() const -> std::size_t;
+  auto capacity() const -> std::size_t;
+  auto resize(std::size_t size) -> void;
+  auto operator[](std::size_t index) const -> T &;
 
-  auto pop_front() -> char {
-    check(m_size > 0, "Buffer is empty");
-    auto out = m_data[m_read_head];
-    m_read_head = (m_read_head + 1) % m_capacity;
-    m_size -= 1;
-    return out;
-  }
-
-  auto drop(std::size_t num) -> void {
-    check(num <= m_size, "Cannot drop more items than we have");
-    m_read_head += num;
-    m_size -= num;
-  }
-
-  auto size() const -> std::size_t { return m_size; }
-  auto capacity() const -> std::size_t { return m_capacity; }
-
-  auto begin() const -> BufferIterator { return BufferIterator{*this}; }
-  auto end() const -> BufferIterator { return BufferIterator{*this, true}; }
+  auto begin() const -> BufferIterator;
+  auto end() const -> BufferIterator;
 
 private:
+  std::allocator<T> alloc;
   std::size_t m_size;
   std::size_t m_capacity;
   std::size_t m_read_head;
   std::size_t m_write_head;
-  char *m_data;
+  T *m_data;
   friend BufferIterator;
 };
 
-CharRingBuffer::BufferIterator::BufferIterator(CharRingBuffer const &buffer,
-                                               bool end)
+template <typename T>
+RingBuffer<T>::RingBuffer()
+    : m_size(0), m_capacity(4), m_read_head(0), m_write_head(0) {
+  m_data = alloc.allocate(m_capacity);
+};
+
+template <typename T> RingBuffer<T>::~RingBuffer() {
+  for (auto i = 0; i < m_size; i++) {
+    std::destroy_at(m_data + m_read_head);
+    m_read_head += 1;
+  }
+  alloc.deallocate(m_data, m_capacity);
+}
+
+template <typename T> auto RingBuffer<T>::resize(std::size_t size) -> void {
+  check(std::bit_ceil(size) >= m_capacity,
+        "New capacity cannot be smaller than current capacity");
+  if (m_size == 0) {
+    alloc.deallocate(m_data, m_capacity);
+    m_capacity = std::bit_ceil(size);
+    m_data = alloc.allocate(m_capacity);
+    return;
+  }
+  auto new_capacity = std::bit_ceil(size);
+  T *new_data = alloc.allocate(new_capacity);
+  std::size_t j = 0;
+  for (auto i = m_read_head; i < m_write_head; i = (i + 1) % m_capacity) {
+    if constexpr (std::is_move_assignable_v<T>) {
+      std::construct_at(new_data + j, std::move(m_data[i]));
+    } else {
+      std::construct_at(new_data + j, m_data[i]);
+    }
+    std::destroy_at(m_data + i);
+    j++;
+  }
+  alloc.deallocate(m_data, m_capacity);
+  m_data = new_data;
+  m_capacity = new_capacity;
+  m_read_head = 0;
+  m_write_head = m_size;
+}
+
+template <typename T>
+auto RingBuffer<T>::operator[](std::size_t index) const -> T & {
+  check(index < m_size, "Index out of bounds");
+  return m_data[(m_read_head + index) % m_capacity];
+}
+
+template <typename T> auto RingBuffer<T>::push_back(T &&value) -> void {
+  if (m_size == (m_capacity - 1)) {
+    resize(m_capacity * 2);
+  }
+  std::construct_at(m_data + m_write_head, std::forward<T>(value));
+  m_write_head = (m_write_head + 1) % m_capacity;
+  m_size += 1;
+}
+
+template <typename T>
+template <typename... Args>
+  requires(std::is_constructible_v<T, Args...>)
+auto RingBuffer<T>::emplace_back(Args &&...args) -> void {
+  if (m_size == (m_capacity - 1)) {
+    resize(m_capacity * 2);
+  }
+  std::construct_at<T>(m_data + m_write_head, args...);
+  m_write_head = (m_write_head + 1) % m_capacity;
+  m_size += 1;
+}
+
+template <typename T> auto RingBuffer<T>::pop_back() -> T {
+  check(m_size > 0, "Buffer is empty");
+  if constexpr (std::is_move_assignable_v<T>) {
+    if (m_write_head == 0) {
+      auto out = std::move(m_data[m_capacity - 1]);
+      std::destroy_at(m_data + (m_capacity - 1));
+      m_write_head = m_capacity - 1;
+      m_size -= 1;
+      return out;
+    }
+    auto out = std::move(m_data[m_write_head - 1]);
+    std::destroy_at(m_data + (m_write_head - 1));
+    m_write_head = m_write_head - 1;
+    m_size -= 1;
+    return out;
+  }
+  if (m_write_head == 0) {
+    auto out = m_data[m_capacity - 1];
+    std::destroy_at(m_data + (m_capacity - 1));
+    m_write_head = m_capacity - 1;
+    m_size -= 1;
+    return out;
+  }
+  auto out = m_data[m_write_head - 1];
+  std::destroy_at(m_data + (m_write_head - 1));
+  m_write_head = m_write_head - 1;
+  m_size -= 1;
+  return out;
+}
+
+template <typename T> auto RingBuffer<T>::pop_front() -> T {
+  check(m_size > 0, "Buffer is empty");
+  if constexpr (std::is_move_assignable_v<T>) {
+    auto out = std::move(m_data[m_read_head]);
+    std::destroy_at(m_data + m_read_head);
+    m_read_head = (m_read_head + 1) % m_capacity;
+    m_size -= 1;
+    return out;
+  }
+  auto out = m_data[m_read_head];
+  std::destroy_at(m_data + m_read_head);
+  m_read_head = (m_read_head + 1) % m_capacity;
+  m_size -= 1;
+  return out;
+}
+
+template <typename T> auto RingBuffer<T>::drop(std::size_t num) -> void {
+  check(num <= m_size, "Cannot drop more items than we have");
+  for (auto i = 0; i < num; i++) {
+    std::destroy_at(m_data + m_read_head);
+    m_read_head += 1;
+  }
+  m_size -= num;
+}
+
+template <typename T> auto RingBuffer<T>::size() const -> std::size_t {
+  return m_size;
+}
+
+template <typename T> auto RingBuffer<T>::capacity() const -> std::size_t {
+  return m_capacity;
+}
+
+template <typename T> auto RingBuffer<T>::begin() const -> BufferIterator {
+  return BufferIterator{*this};
+}
+
+template <typename T> auto RingBuffer<T>::end() const -> BufferIterator {
+  return BufferIterator{*this, true};
+}
+
+template <typename T>
+RingBuffer<T>::BufferIterator::BufferIterator(RingBuffer const &buffer,
+                                              bool end)
     : buffer(buffer), end(end) {}
 
-bool CharRingBuffer::BufferIterator::operator==(
+template <typename T>
+bool RingBuffer<T>::BufferIterator::operator==(
     BufferIterator const &other) const {
   check(&this->buffer == &other.buffer,
         "Iterator does not point to same CharRingBuffer");
@@ -143,28 +233,33 @@ bool CharRingBuffer::BufferIterator::operator==(
   return other.index == this->index;
 };
 
-bool CharRingBuffer::BufferIterator::operator!=(BufferIterator other) const {
+template <typename T>
+bool RingBuffer<T>::BufferIterator::operator!=(BufferIterator other) const {
   return !(*this == other);
 }
 
-CharRingBuffer::BufferIterator &CharRingBuffer::BufferIterator::operator++() {
+template <typename T>
+RingBuffer<T>::BufferIterator &RingBuffer<T>::BufferIterator::operator++() {
   index++;
   return *this;
 }
 
-CharRingBuffer::BufferIterator CharRingBuffer::BufferIterator::operator++(int) {
+template <typename T>
+RingBuffer<T>::BufferIterator RingBuffer<T>::BufferIterator::operator++(int) {
   BufferIterator retval = *this;
   ++(*this);
   return retval;
 }
 
-char CharRingBuffer::BufferIterator::operator*() const {
+template <typename T>
+auto RingBuffer<T>::BufferIterator::operator*() const -> T & {
   check((index <= this->buffer.size()), "Index out of range");
   return this->buffer[index];
 }
 
-std::ostream &operator<<(std::ostream &os, const CharRingBuffer &dt) {
-  for (auto i : dt) {
+template <typename T>
+std::ostream &operator<<(std::ostream &os, const RingBuffer<T> &dt) {
+  for (auto &i : dt) {
     os << i;
   }
   return os;
